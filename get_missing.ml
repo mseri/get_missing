@@ -3,15 +3,15 @@ let caches =
   ; "https://gitlab.ocamlpro.com/OCamlPro/opam-repository/-/raw/cached/cache/"
   ; "https://opam.robur.coop/cache/"
   ]
-
-let init_opam () =
-  OpamSystem.init ();
-  let root = OpamStateConfig.opamroot () in
-  ignore (OpamStateConfig.load_defaults ~lock_kind:`Lock_read root);
-  OpamFormatConfig.init ();
-  OpamCoreConfig.init ~safe_mode:true ();
-  OpamRepositoryConfig.init ();
-  OpamStateConfig.init ~root_dir:root ()
+(*  *)
+(* let init_opam () = *)
+(*   OpamSystem.init (); *)
+(*   let root = OpamStateConfig.opamroot () in *)
+(*   ignore (OpamStateConfig.load_defaults ~lock_kind:`Lock_read root); *)
+(*   OpamFormatConfig.init (); *)
+(*   OpamCoreConfig.init ~safe_mode:true (); *)
+(*   OpamRepositoryConfig.init (); *)
+(*   OpamStateConfig.init ~root_dir:root () *)
 
 let get_opam_repo () =
   let opam_root = OpamFilename.concat_and_resolve (OpamStateConfig.opamroot ()) "repo/default" in
@@ -57,7 +57,13 @@ let rec retry url = function
       let* body = get_file c url in
       if Option.is_some body then Lwt.return body else retry url rest 
 
-let save_file opam_package content =
+let write content filename =
+  let oc = open_out_bin filename in
+  Fun.protect
+      (fun () -> output_string oc content)
+        ~finally:(fun () -> close_out_noerr oc)
+
+let save_package_file opam_package content =
   let name = OpamFile.OPAM.name opam_package |> OpamPackage.Name.to_string in
   let version = OpamFile.OPAM.version opam_package |> OpamPackage.Version.to_string in
   let url = Option.map (OpamUrl.to_string) (OpamFile.OPAM.get_url opam_package) in
@@ -67,18 +73,28 @@ let save_file opam_package content =
     | None -> failwith "Unable to infer file extension from url"
   in
   let filename = name ^ "-" ^ version ^ extension in
-  let oc = open_out_bin filename in
-  Fun.protect
-    (fun () -> output_string oc content)
-    ~finally:(fun () -> close_out_noerr oc)
+  write content filename;
+  name ^ "." ^ version, filename
 
 let () = 
-  init_opam ();
+  (* init_opam (); *)
   let opam_repo = get_opam_repo () in
-  let p = OpamPackage.of_string "cohttp.5.1.0" in
-  let opam_p = get_opam_file opam_repo p in
-  let url = process opam_p in
-  let content = Lwt_main.run @@ retry url caches in
-  match content with
-    | Some f -> save_file opam_p f
-    | None -> print_endline ("Could not save " ^ (OpamPackage.to_string p))
+  let ps = [OpamPackage.of_string "cohttp.5.1.0"] in
+  let ns = Lwt_list.filter_map_p (fun p ->
+    let open Lwt.Syntax in
+    let opam_p = get_opam_file opam_repo p in
+    let url = process opam_p in
+    let* content = retry url caches in
+    match content with
+    | Some f -> begin
+      try
+        Lwt.return_some (save_package_file opam_p f)
+      with e -> 
+        print_endline (Printexc.to_string e);
+        Lwt.return_none
+      end
+    | None -> print_endline ("Could not save " ^ (OpamPackage.to_string p)); Lwt.return_none) ps
+  in
+  let ns = Lwt_main.run ns |> List.map (fun (p,n) -> p ^ " " ^ n) in
+  write (String.concat "\n" ns) "saved_files.txt"
+
