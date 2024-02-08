@@ -3,15 +3,6 @@ let caches =
   ; "https://gitlab.ocamlpro.com/OCamlPro/opam-repository/-/raw/cached/cache/"
   ; "https://opam.robur.coop/cache/"
   ]
-(*  *)
-(* let init_opam () = *)
-(*   OpamSystem.init (); *)
-(*   let root = OpamStateConfig.opamroot () in *)
-(*   ignore (OpamStateConfig.load_defaults ~lock_kind:`Lock_read root); *)
-(*   OpamFormatConfig.init (); *)
-(*   OpamCoreConfig.init ~safe_mode:true (); *)
-(*   OpamRepositoryConfig.init (); *)
-(*   OpamStateConfig.init ~root_dir:root () *)
 
 let get_opam_repo () =
   let opam_root = OpamFilename.concat_and_resolve (OpamStateConfig.opamroot ()) "repo/default" in
@@ -58,10 +49,16 @@ let rec retry url = function
       if Option.is_some body then Lwt.return body else retry url rest 
 
 let write content filename =
-  let oc = open_out_bin filename in
-  Fun.protect
-      (fun () -> output_string oc content)
-        ~finally:(fun () -> close_out_noerr oc)
+  Out_channel.with_open_bin filename
+    (fun oc -> Out_channel.output_string oc content)
+
+let [@tail_mod_cons] rec input_trimmed_lines ic =
+  match input_line ic with
+    | line -> String.trim line :: input_trimmed_lines ic
+    | exception End_of_file -> []
+
+let read filename =
+  In_channel.with_open_text filename input_trimmed_lines
 
 let save_package_file opam_package content =
   let name = OpamFile.OPAM.name opam_package |> OpamPackage.Name.to_string in
@@ -77,9 +74,9 @@ let save_package_file opam_package content =
   name ^ "." ^ version, filename
 
 let () = 
-  (* init_opam (); *)
   let opam_repo = get_opam_repo () in
-  let ps = [OpamPackage.of_string "cohttp.5.1.0"] in
+  (* "filelist.txt" is a list name.version *)
+  let ps = read "filelist.txt" |> List.map OpamPackage.of_string in
   let ns = Lwt_list.filter_map_p (fun p ->
     let open Lwt.Syntax in
     let opam_p = get_opam_file opam_repo p in
@@ -95,6 +92,6 @@ let () =
       end
     | None -> print_endline ("Could not save " ^ (OpamPackage.to_string p)); Lwt.return_none) ps
   in
-  let ns = Lwt_main.run ns |> List.map (fun (p,n) -> p ^ " " ^ n) in
+  let ns = Lwt_main.run ns |> List.map (fun (p ,n) -> p ^ " https://github.com/ocaml/opam-source-archives/raw/main/" ^ n) in
   write (String.concat "\n" ns) "saved_files.txt"
 
