@@ -1,7 +1,7 @@
 let caches = 
   [ "https://opam.ocaml.org/cache/"
-  ; "https://gitlab.ocamlpro.com/OCamlPro/opam-repository/-/raw/cached/cache/"
-  ; "https://opam.robur.coop/cache/"
+    ; "https://gitlab.ocamlpro.com/OCamlPro/opam-repository/-/raw/cached/cache/"
+    ; "https://opam.robur.coop/cache/"
   ]
 
 let get_opam_repo () =
@@ -43,10 +43,10 @@ let get_file cache url =
   else Lwt.return_none
 
 let rec retry url = function
-    | [] -> Lwt.return_none
-    | c :: rest -> let open Lwt.Syntax in
-      let* body = get_file c url in
-      if Option.is_some body then Lwt.return body else retry url rest 
+  | [] -> Lwt.return_none
+  | c :: rest -> let open Lwt.Syntax in
+    let* body = get_file c url in
+    if Option.is_some body then Lwt.return body else retry url rest 
 
 let write content filename =
   Out_channel.with_open_bin filename
@@ -54,8 +54,8 @@ let write content filename =
 
 let [@tail_mod_cons] rec input_trimmed_lines ic =
   match input_line ic with
-    | line -> String.trim line :: input_trimmed_lines ic
-    | exception End_of_file -> []
+  | line -> String.trim line :: input_trimmed_lines ic
+  | exception End_of_file -> []
 
 let read filename =
   In_channel.with_open_text filename input_trimmed_lines
@@ -80,17 +80,20 @@ let () =
   let ns = Lwt_list.filter_map_p (fun p ->
     let open Lwt.Syntax in
     let opam_p = get_opam_file opam_repo p in
-    let url = process opam_p in
-    let* content = retry url caches in
-    match content with
-    | Some f -> begin
-      try
-        Lwt.return_some (save_package_file opam_p f)
-      with e -> 
-        print_endline (Printexc.to_string e);
-        Lwt.return_none
-      end
-    | None -> print_endline ("Could not save " ^ (OpamPackage.to_string p)); Lwt.return_none) ps
+    if OpamFilter.to_string (OpamFile.OPAM.available opam_p) = "false" then Lwt.return_none
+    else begin
+      let url = process opam_p in
+      let* content = retry url caches in
+      match content with
+      | Some f -> begin
+        try
+          Lwt.return_some (save_package_file opam_p f)
+        with e -> 
+          print_endline (Printexc.to_string e);
+          Lwt.return_none
+        end
+      | None -> print_endline ("Could not save " ^ (OpamPackage.to_string p)); Lwt.return_none
+      end) ps
   in
   let ns = Lwt_main.run ns |> List.map (fun (p ,n) -> p ^ " https://github.com/ocaml/opam-source-archives/raw/main/" ^ n) in
   write (String.concat "\n" ns) "saved_files.txt"
