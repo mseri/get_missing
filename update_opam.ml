@@ -1,9 +1,11 @@
 let get_opam_repo () =
   OpamFilename.Dir.of_string "/Users/mseri/code/opam-repository"
 
-let get_opam_file opam_repo p =
+let opam_filename opam_repo p =
   let name = OpamPackage.Name.to_string p.OpamPackage.name in
-  let opam_filename = OpamRepositoryPath.opam opam_repo (Some name) p in
+  OpamRepositoryPath.opam opam_repo (Some name) p
+
+let get_opam_file opam_filename =
   print_endline ("Reading from: " ^ (OpamFile.to_string opam_filename));
   OpamFile.OPAM.read opam_filename
 
@@ -19,7 +21,7 @@ let [@tail_mod_cons] rec input_trimmed_lines ic =
 let read filename =
   In_channel.with_open_text filename input_trimmed_lines
 
-let _save_package_file opam_package content =
+let _save_opam_file opam_package content =
   let name = OpamFile.OPAM.name opam_package |> OpamPackage.Name.to_string in
   let version = OpamFile.OPAM.version opam_package |> OpamPackage.Version.to_string in
   let url = Option.map (OpamUrl.to_string) (OpamFile.OPAM.get_url opam_package) in
@@ -38,11 +40,20 @@ let () =
   let ps = read "saved_files.txt"
     |> List.filter_map (fun s ->
       match String.split_on_char ' ' s with
-      | [pkg; url] -> Some (get_opam_file opam_repo @@ OpamPackage.of_string pkg, url)
+      | [pkg; url] ->
+        Some (opam_filename opam_repo @@ OpamPackage.of_string pkg, url)
       | _ -> None)
   in
-  List.iter (fun (_, u) -> print_endline u) ps
-  (*
+  List.iter (fun (fn, url) ->
+    let opam_p = get_opam_file fn in
+    let checksum = match OpamFile.OPAM.url opam_p with
+      | Some url -> OpamFile.URL.checksum url 
+      | None -> []
+    in 
+    let url_p = OpamFile.URL.create ~checksum (OpamUrl.of_string url) in
+    let opam_p = OpamFile.OPAM.with_url url_p opam_p in
+    OpamFile.OPAM.write fn opam_p) ps
+(*
   let ns = Lwt_list.filter_map_p (fun p ->
     let open Lwt.Syntax in
     let opam_p = get_opam_file opam_repo p in
