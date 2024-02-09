@@ -1,3 +1,9 @@
 (executables
  (names get_missing update_opam)
- (libraries cohttp-lwt-unix clz.cfg clz.cohttp opam-file-format opam-state uri))
+ (libraries
+  cohttp-lwt-unix
+  clz.cfg
+  clz.cohttp
+  opam-file-format
+  opam-state
+  uri))
