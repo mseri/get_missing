@@ -15,6 +15,9 @@ let get_opam_file opam_repo p =
   print_endline ("Reading from: " ^ OpamFile.to_string opam_filename);
   OpamFile.OPAM.read opam_filename
 
+let package_of_string_opt s =
+  try Some (OpamPackage.of_string s) with _ -> None
+
 let get_all_versions opam_repo name =
   let name_str = OpamPackage.Name.to_string name in
   let pkg_dir =
@@ -25,7 +28,7 @@ let get_all_versions opam_repo name =
     OpamFilename.dirs pkg_dir
     |> List.filter_map (fun dir ->
            let base = Filename.basename (OpamFilename.Dir.to_string dir) in
-           match OpamPackage.of_string_opt base with
+           match package_of_string_opt base with
            | Some pkg when OpamPackage.name pkg = name -> Some pkg
            | _ -> None)
 
@@ -73,7 +76,7 @@ let source_url_reachable url =
       let uri = Uri.of_string url in
       let headers = Clz_cohttp.update_header None in
       let* (resp, body) = Cohttp_lwt_unix.Client.head ~headers uri in
-      let* () = Cohttp_lwt.Body.drain_body body in
+      let* _ = Cohttp_lwt.Body.to_string body in
       let status = Cohttp.Response.status resp |> Cohttp.Code.code_of_status in
       Lwt.return (status >= 200 && status < 400))
     (fun _ -> Lwt.return false)
@@ -181,7 +184,7 @@ let () =
     Lwt_main.run
       (Lwt_list.map_p
          (fun arg ->
-           match OpamPackage.of_string_opt arg with
+           match package_of_string_opt arg with
            | Some p -> (
                try
                  let opam_p = get_opam_file opam_repo p in
