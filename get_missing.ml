@@ -82,6 +82,15 @@ let write content filename =
   Out_channel.with_open_bin filename (fun oc ->
       Out_channel.output_string oc content)
 
+let[@tail_mod_cons] rec input_trimmed_lines ic =
+  match input_line ic with
+  | line -> String.trim line :: input_trimmed_lines ic
+  | exception End_of_file -> []
+
+let read_lines filename =
+  In_channel.with_open_text filename input_trimmed_lines
+  |> List.filter (fun s -> s <> "")
+
 let save_package_file opam_package content =
   let name = OpamFile.OPAM.name opam_package |> OpamPackage.Name.to_string in
   let version =
@@ -146,9 +155,27 @@ let fetch_if_missing p opam_p =
 
 let () =
   let opam_repo = get_opam_repo () in
-  let args = Array.to_list Sys.argv |> List.tl in
+  let file = ref None in
+  let cli_packages = ref [] in
+  Arg.parse
+    [ ( "-f"
+      , Arg.String (fun s -> file := Some s)
+      , "<file>  Read package list from file (one entry per line)" )
+    ; ( "--file"
+      , Arg.String (fun s -> file := Some s)
+      , "<file>  Read package list from file (one entry per line)" )
+    ]
+    (fun p -> cli_packages := p :: !cli_packages)
+    "Usage: get_missing [-f <file>] [package.version | package] ...";
+  let file_packages =
+    match !file with
+    | None -> []
+    | Some path -> read_lines path
+  in
+  let args = List.rev !cli_packages @ file_packages in
   if args = [] then (
-    print_endline "Usage: get_missing <package.version | package> ...";
+    print_endline
+      "No packages specified. Provide package names as arguments or use -f <file>.";
     exit 1);
   let ns =
     Lwt_main.run
