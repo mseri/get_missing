@@ -9,10 +9,6 @@ let get_opam_file opam_filename =
   print_endline ("Reading from: " ^ OpamFile.to_string opam_filename);
   OpamFile.OPAM.read opam_filename
 
-let write content filename =
-  Out_channel.with_open_bin filename (fun oc ->
-      Out_channel.output_string oc content)
-
 let[@tail_mod_cons] rec input_trimmed_lines ic =
   match input_line ic with
   | line -> String.trim line :: input_trimmed_lines ic

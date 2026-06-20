@@ -75,8 +75,7 @@ let source_url_reachable url =
     (fun () ->
       let uri = Uri.of_string url in
       let headers = Clz_cohttp.update_header None in
-      let* (resp, body) = Cohttp_lwt_unix.Client.head ~headers uri in
-      let* _ = Cohttp_lwt.Body.to_string body in
+      let* resp = Cohttp_lwt_unix.Client.head ~headers uri in
       let status = Cohttp.Response.status resp |> Cohttp.Code.code_of_status in
       Lwt.return (status >= 200 && status < 400))
     (fun _ -> Lwt.return false)
