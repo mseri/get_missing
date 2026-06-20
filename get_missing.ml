@@ -1,6 +1,9 @@
 let caches =
   [ "https://opam.ocaml.org/cache/"; "https://opam.robur.coop/cache/" ]
 
+let debug = ref false
+let dlog fmt = Printf.ksprintf (fun s -> if !debug then print_endline ("[debug] " ^ s)) fmt
+
 let get_opam_repo () =
   let opam_root =
     OpamFilename.concat_and_resolve (OpamStateConfig.opamroot ()) "repo/default"
@@ -12,7 +15,7 @@ let get_opam_repo () =
 let get_opam_file opam_repo p =
   let name = OpamPackage.Name.to_string p.OpamPackage.name in
   let opam_filename = OpamRepositoryPath.opam opam_repo (Some name) p in
-  print_endline ("Reading from: " ^ OpamFile.to_string opam_filename);
+  dlog "reading opam file: %s" (OpamFile.to_string opam_filename);
   OpamFile.OPAM.read opam_filename
 
 let package_of_string_opt s =
@@ -54,9 +57,11 @@ let process opam_p =
 let get_file cache url =
   let open Lwt.Syntax in
   let uri = Uri.of_string (cache ^ "/" ^ url) in
+  dlog "GET %s/%s" cache url;
   let headers = Clz_cohttp.update_header None in
   let* res = Cohttp_lwt_unix.Client.get ~headers uri in
   let status = Cohttp.Response.status (fst res) |> Cohttp.Code.code_of_status in
+  dlog "  -> HTTP %d" status;
   if status = 200 || status = 302 then
     let* body = Clz_cohttp.decompress res in
     Lwt.return_some body
@@ -73,12 +78,18 @@ let source_url_reachable url =
   let open Lwt.Syntax in
   Lwt.catch
     (fun () ->
+      dlog "HEAD %s" url;
       let uri = Uri.of_string url in
       let headers = Clz_cohttp.update_header None in
       let* resp = Cohttp_lwt_unix.Client.head ~headers uri in
       let status = Cohttp.Response.status resp |> Cohttp.Code.code_of_status in
-      Lwt.return (status >= 200 && status < 400))
-    (fun _ -> Lwt.return false)
+      let reachable = status >= 200 && status < 400 in
+      dlog "  -> HTTP %d (%s)" status
+        (if reachable then "reachable" else "unreachable");
+      Lwt.return reachable)
+    (fun e ->
+      dlog "  -> error: %s" (Printexc.to_string e);
+      Lwt.return false)
 
 let write content filename =
   Out_channel.with_open_bin filename (fun oc ->
@@ -107,6 +118,7 @@ let save_package_file opam_package content =
   in
   let filename = name ^ "-" ^ version ^ extension in
   write content filename;
+  dlog "saved %s.%s as %s" name version filename;
   (name ^ "." ^ version, filename)
 
 let rec get p opam_p urls =
@@ -130,8 +142,11 @@ let is_available opam_p =
   OpamFilter.to_string (OpamFile.OPAM.available opam_p) <> "false"
 
 let fetch_from_cache p opam_p =
-  if not (is_available opam_p) then Lwt.return_none
+  if not (is_available opam_p) then (
+    dlog "%s: marked unavailable, skipping" (OpamPackage.to_string p);
+    Lwt.return_none)
   else (
+    dlog "%s: fetching from cache (explicit version)" (OpamPackage.to_string p);
     try
       let urls = process opam_p in
       get p opam_p urls
@@ -139,14 +154,20 @@ let fetch_from_cache p opam_p =
 
 let fetch_if_missing p opam_p =
   let open Lwt.Syntax in
-  if not (is_available opam_p) then Lwt.return_none
+  if not (is_available opam_p) then (
+    dlog "%s: marked unavailable, skipping" (OpamPackage.to_string p);
+    Lwt.return_none)
   else
     match OpamFile.OPAM.url opam_p with
-    | None -> Lwt.return_none
+    | None ->
+        dlog "%s: no source URL, skipping" (OpamPackage.to_string p);
+        Lwt.return_none
     | Some opam_url ->
         let src_url = OpamUrl.to_string (OpamFile.URL.url opam_url) in
         let* reachable = source_url_reachable src_url in
-        if reachable then Lwt.return_none
+        if reachable then (
+          dlog "%s: source reachable, skipping" (OpamPackage.to_string p);
+          Lwt.return_none)
         else (
           print_endline
             ("Source URL unreachable for "
@@ -166,9 +187,10 @@ let () =
     ; ( "--file"
       , Arg.String (fun s -> file := Some s)
       , "<file>  Read package list from file (one entry per line)" )
+    ; ("--debug", Arg.Set debug, "  Enable debug output")
     ]
     (fun p -> cli_packages := p :: !cli_packages)
-    "Usage: get_missing [-f <file>] [package.version | package] ...";
+    "Usage: get_missing [--debug] [-f <file>] [package.version | package] ...";
   let file_packages =
     match !file with
     | None -> []
@@ -179,12 +201,16 @@ let () =
     print_endline
       "No packages specified. Provide package names as arguments or use -f <file>.";
     exit 1);
+  dlog "processing %d entr%s: %s" (List.length args)
+    (if List.length args = 1 then "y" else "ies")
+    (String.concat ", " args);
   let ns =
     Lwt_main.run
       (Lwt_list.map_p
          (fun arg ->
            match package_of_string_opt arg with
            | Some p -> (
+               dlog "%s: explicit version" (OpamPackage.to_string p);
                try
                  let opam_p = get_opam_file opam_repo p in
                  let open Lwt.Syntax in
@@ -203,7 +229,11 @@ let () =
                if versions = [] then (
                  print_endline ("No versions found for package: " ^ arg);
                  Lwt.return [])
-               else
+               else (
+                 dlog "%s: found %d version%s: %s" arg (List.length versions)
+                   (if List.length versions = 1 then "" else "s")
+                   (String.concat ", "
+                      (List.map OpamPackage.to_string versions));
                  Lwt_list.filter_map_p
                    (fun p ->
                      try
@@ -216,7 +246,7 @@ let () =
                           ^ ": "
                           ^ Printexc.to_string e);
                        Lwt.return_none)
-                   versions)
+                   versions))
          args
        |> Lwt.map List.concat)
     |> List.map (fun (p, n) ->
