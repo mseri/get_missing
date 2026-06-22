@@ -1,9 +1,9 @@
 (executables
- (names get_missing update_opam)
+ (names get_missing check_source)
+ (libraries common))
+
+(executable
+ (name update_opam)
  (libraries
-  cohttp-lwt-unix
-  clz.cfg
-  clz.cohttp
   opam-file-format
-  opam-state
-  uri))
+  opam-state))
