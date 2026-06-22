@@ -1,6 +1,3 @@
-let get_opam_repo () =
-  OpamFilename.Dir.of_string "/Users/mseri/code/opam-repository"
-
 let opam_filename opam_repo p =
   let name = OpamPackage.Name.to_string p.OpamPackage.name in
   OpamRepositoryPath.opam opam_repo (Some name) p
@@ -8,10 +5,6 @@ let opam_filename opam_repo p =
 let get_opam_file opam_filename =
   print_endline ("Reading from: " ^ OpamFile.to_string opam_filename);
   OpamFile.OPAM.read opam_filename
-
-let write content filename =
-  Out_channel.with_open_bin filename (fun oc ->
-      Out_channel.output_string oc content)
 
 let[@tail_mod_cons] rec input_trimmed_lines ic =
   match input_line ic with
@@ -21,8 +14,10 @@ let[@tail_mod_cons] rec input_trimmed_lines ic =
 let read filename = In_channel.with_open_text filename input_trimmed_lines
 
 let () =
-  let opam_repo = get_opam_repo () in
-  (* "filelist.txt" is a list name.version *)
+  if Array.length Sys.argv < 2 then (
+    print_endline "Usage: update_opam <path-to-opam-repository>";
+    exit 1);
+  let opam_repo = OpamFilename.Dir.of_string Sys.argv.(1) in
   let ps =
     read "saved_files.txt"
     |> List.filter_map (fun s ->

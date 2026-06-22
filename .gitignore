@@ -1,3 +1,5 @@
 _build/
 _opam/
 .vscode/
+saved_files.txt
+.claude/
