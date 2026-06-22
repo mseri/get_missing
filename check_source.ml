@@ -98,13 +98,11 @@ let () =
         Unreachable
     | Some url -> check_url "Source URL" url expected_hashes
   in
-  let cache_result = check_cache hash_paths expected_hashes in
   let cli_result =
-    match url_opt with
-    | None -> Unreachable
-    | Some url -> check_url "CLI URL" url expected_hashes
+    Option.map (fun url -> check_url "CLI URL" url expected_hashes) url_opt
   in
-  let all_results = [ src_result; cache_result; cli_result ] in
+  let cache_result = check_cache hash_paths expected_hashes in
+  let all_results = src_result :: Option.to_list cli_result @ [ cache_result ] in
   let had_error = any_wrong_checksum all_results in
   match first_verified all_results with
   | None ->
