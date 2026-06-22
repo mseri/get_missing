@@ -1,3 +1,46 @@
+type source_result =
+  | Unreachable
+  | WrongChecksum
+  | Verified of string
+
+let check_url label url expected_hashes =
+  Lwt_main.run
+    (let open Lwt.Syntax in
+     let* content = Common.download_url url in
+     match content with
+     | None ->
+         print_endline (label ^ ": not reachable: " ^ url);
+         Lwt.return Unreachable
+     | Some c ->
+         if Common.verify_checksum c expected_hashes then (
+           print_endline (label ^ ": OK (checksum verified): " ^ url);
+           Lwt.return (Verified c))
+         else (
+           print_endline (label ^ ": wrong checksum: " ^ url);
+           Lwt.return WrongChecksum))
+
+let check_cache hash_paths expected_hashes =
+  Lwt_main.run
+    (let open Lwt.Syntax in
+     let* content = Common.download_from_caches hash_paths in
+     match content with
+     | None ->
+         print_endline "Cache: not reachable";
+         Lwt.return Unreachable
+     | Some c ->
+         if Common.verify_checksum c expected_hashes then (
+           print_endline "Cache: OK (checksum verified)";
+           Lwt.return (Verified c))
+         else (
+           print_endline "Cache: wrong checksum";
+           Lwt.return WrongChecksum))
+
+let first_verified results =
+  List.find_map (function Verified c -> Some c | _ -> None) results
+
+let any_wrong_checksum results =
+  List.exists (function WrongChecksum -> true | _ -> false) results
+
 let () =
   let opam_repo = Common.get_opam_repo () in
   let positional = ref [] in
@@ -40,45 +83,38 @@ let () =
         (Printexc.to_string e);
       exit 1
   in
+  Common.dlog "expected checksums (%d):" (List.length expected_hashes);
+  List.iter (fun h -> Common.dlog "  %s" h) expected_hashes;
   let hash_paths = Common.process opam_p in
-  let cache_ok =
-    Lwt_main.run
-      (let open Lwt.Syntax in
-       let* content = Common.download_from_caches hash_paths in
-       match content with
-       | None ->
-           print_endline "Cache: not reachable";
-           Lwt.return_none
-       | Some c ->
-           if Common.verify_checksum c expected_hashes then (
-             print_endline "Cache: OK (checksum verified)";
-             Lwt.return_some c)
-           else (
-             print_endline "Cache: wrong checksum";
-             Lwt.return_none))
+  Common.dlog "cache paths: %s" (String.concat ", " hash_paths);
+  let source_url = Common.get_source_url opam_p in
+  (match source_url with
+  | Some u -> Common.dlog "source url: %s" u
+  | None -> Common.dlog "source url: none");
+  let src_result =
+    match source_url with
+    | None ->
+        print_endline "Source URL: none in opam file";
+        Unreachable
+    | Some url -> check_url "Source URL" url expected_hashes
   in
-  let url_ok =
+  let cache_result = check_cache hash_paths expected_hashes in
+  let cli_result =
     match url_opt with
-    | None -> None
-    | Some url ->
-        Lwt_main.run
-          (let open Lwt.Syntax in
-           let* content = Common.download_url url in
-           match content with
-           | None ->
-               print_endline ("URL: not reachable: " ^ url);
-               Lwt.return_none
-           | Some c ->
-               if Common.verify_checksum c expected_hashes then (
-                 print_endline ("URL: OK (checksum verified): " ^ url);
-                 Lwt.return_some (c, url))
-               else (
-                 print_endline ("URL: wrong checksum: " ^ url);
-                 Lwt.return_none))
+    | None -> Unreachable
+    | Some url -> check_url "CLI URL" url expected_hashes
   in
-  match (cache_ok, url_ok) with
-  | None, Some (content, _url) ->
-      print_endline "Cache unavailable but URL is valid; saving file locally.";
+  let all_results = [ src_result; cache_result; cli_result ] in
+  let had_error = any_wrong_checksum all_results in
+  match first_verified all_results with
+  | None ->
+      print_endline
+        "No source with correct checksum found.";
+      exit 1
+  | Some _ when not had_error ->
+      print_endline "All checked sources have correct checksums. No action needed."
+  | Some content ->
+      print_endline "Checksum mismatch on at least one source; saving verified content.";
       (try
          let pkg_str, filename = Common.save_package_file opam_p content in
          Common.save_to_saved_files [ Common.make_saved_entry pkg_str filename ];
@@ -86,11 +122,3 @@ let () =
        with e ->
          Printf.eprintf "Error saving file: %s\n" (Printexc.to_string e);
          exit 1)
-  | Some _, _ ->
-      print_endline
-        "Cache source is accessible and checksum is valid. No action needed."
-  | None, None ->
-      print_endline
-        "Both cache and URL (if provided) are unavailable or have wrong \
-         checksum.";
-      exit 1

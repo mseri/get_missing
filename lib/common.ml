@@ -34,6 +34,11 @@ let get_all_versions opam_repo name =
            | Some pkg when OpamPackage.name pkg = name -> Some pkg
            | _ -> None)
 
+let get_source_url opam_package =
+  match OpamFile.OPAM.url opam_package with
+  | None -> None
+  | Some url -> Some (OpamUrl.to_string (OpamFile.URL.url url))
+
 let checksums opam_package =
   match OpamFile.OPAM.url opam_package with
   | None ->
@@ -180,14 +185,23 @@ let verify_checksum content hash_strings =
     ~finally:(fun () -> try Sys.remove tmp with _ -> ())
     (fun () ->
       write content tmp;
-      List.exists
+      dlog "verifying %d checksum(s)" (List.length hash_strings);
+      List.for_all
         (fun hash_str ->
           try
             let expected = OpamHash.of_string hash_str in
             let kind = OpamHash.kind expected in
             let computed = OpamHash.compute ~kind tmp in
-            OpamHash.to_string expected = OpamHash.to_string computed
-          with _ -> false)
+            let expected_s = OpamHash.to_string expected in
+            let computed_s = OpamHash.to_string computed in
+            let ok = expected_s = computed_s in
+            dlog "  %s: expected=%s computed=%s -> %s" hash_str expected_s
+              computed_s
+              (if ok then "OK" else "MISMATCH");
+            ok
+          with e ->
+            dlog "  %s: error=%s" hash_str (Printexc.to_string e);
+            false)
         hash_strings)
 
 let rec get p opam_p urls =
