@@ -256,10 +256,18 @@ let fetch_from_cache p opam_p =
     Lwt.return_none)
   else (
     dlog "%s: fetching from cache (explicit version)" (OpamPackage.to_string p);
-    try
-      let urls = process opam_p in
-      get p opam_p urls
-    with _ -> Lwt.return_none)
+    match OpamFile.OPAM.url opam_p with
+    | None ->
+        print_endline ("Error: " ^ OpamPackage.to_string p ^ " has no source URL");
+        Lwt.return_none
+    | Some _ ->
+        let open Lwt.Syntax in
+        let urls = process opam_p in
+        let* result = get p opam_p urls in
+        if Option.is_none result then
+          print_endline
+            ("Error: " ^ OpamPackage.to_string p ^ " not found in any cache");
+        Lwt.return result)
 
 let fetch_if_missing p opam_p =
   let open Lwt.Syntax in
