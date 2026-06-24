@@ -6,7 +6,7 @@ The context for this is on the [opam-repository wiki](https://github.com/ocaml/o
 
 The archival in the [ocaml/opam-source-archives](https://github.com/ocaml/opam-source-archives) repository is manual and I don't have plans to automate it for the moment (even though it would benefit from some polishing).
 
-Note that the commands have also a minimal help in case of doubts and a helpful (for me) debug flag. They were assembled for my own sake and automation, so the quality is what it is and I am not really intending to improve them more than I need.
+Note that the commands have also a minimal help in case of doubts and a helpful (for me) debug flag. They were assembled for my own sake and automation, so the quality is what it is and I am not really intending to improve them more than I need: you could think of it as human slop (although now there are a couple of things that I let an AI write, see end of this file).
 
 ## How to use
 
