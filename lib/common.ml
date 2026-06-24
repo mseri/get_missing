@@ -63,8 +63,8 @@ let process opam_p =
 
 let get_file cache url =
   let open Lwt.Syntax in
-  let uri = Uri.of_string (cache ^ "/" ^ url) in
-  dlog "GET %s/%s" cache url;
+  let uri = Uri.of_string (cache ^ url) in
+  dlog "GET %s%s" cache url;
   let headers = Clz_cohttp.update_header None in
   let* res = Cohttp_lwt_unix.Client.get ~headers uri in
   let status = Cohttp.Response.status (fst res) |> Cohttp.Code.code_of_status in
