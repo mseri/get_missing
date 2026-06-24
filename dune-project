@@ -9,6 +9,7 @@
 	cohttp-lwt-unix
 	clz
 	lwt
+ tls-lwt
 	opam-file-format
 	opam-state
 	uri))
