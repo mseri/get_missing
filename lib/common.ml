@@ -208,18 +208,40 @@ let verify_checksum content hash_strings =
             false)
         hash_strings)
 
+(* Maps hash-path URL → promise of the saved filename.
+   Stored before awaiting so concurrent lookups on the same URL share one download. *)
+let download_cache : (string, string option Lwt.t) Hashtbl.t = Hashtbl.create 16
+
 let rec get p opam_p urls =
   match urls with
   | [] -> Lwt.return_none
   | url :: rest -> (
+      let promise =
+        match Hashtbl.find_opt download_cache url with
+        | Some p -> p
+        | None ->
+            let p =
+              let open Lwt.Syntax in
+              let* content = retry url caches in
+              match content with
+              | None -> Lwt.return_none
+              | Some f -> (
+                  try
+                    let _, filename = save_package_file opam_p f in
+                    Lwt.return_some filename
+                  with e ->
+                    print_endline (Printexc.to_string e);
+                    Lwt.return_none)
+            in
+            Hashtbl.replace download_cache url p;
+            p
+      in
       let open Lwt.Syntax in
-      let* content = retry url caches in
-      match content with
-      | Some f -> (
-          try Lwt.return_some (save_package_file opam_p f)
-          with e ->
-            print_endline (Printexc.to_string e);
-            Lwt.return_none)
+      let* filename_opt = promise in
+      match filename_opt with
+      | Some filename ->
+          dlog "%s: using file %s" (OpamPackage.to_string p) filename;
+          Lwt.return_some (OpamPackage.to_string p, filename)
       | None ->
           print_endline
             ("Could not save " ^ OpamPackage.to_string p ^ " from " ^ url);
