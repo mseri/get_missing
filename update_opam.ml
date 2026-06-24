@@ -21,10 +21,10 @@ let () =
   let ps =
     read "saved_files.txt"
     |> List.filter_map (fun s ->
-           match String.split_on_char ' ' s with
-           | [ pkg; url ] ->
-               Some (opam_filename opam_repo @@ OpamPackage.of_string pkg, url)
-           | _ -> None)
+        match String.split_on_char ' ' s with
+        | [ pkg; url ] ->
+            Some (opam_filename opam_repo @@ OpamPackage.of_string pkg, url)
+        | _ -> None)
   in
   List.iter
     (fun (fn, url) ->

@@ -4,6 +4,4 @@
 
 (executable
  (name update_opam)
- (libraries
-  opam-file-format
-  opam-state))
+ (libraries opam-file-format opam-state))

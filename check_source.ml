@@ -1,7 +1,4 @@
-type source_result =
-  | Unreachable
-  | WrongChecksum
-  | Verified of string
+type source_result = Unreachable | WrongChecksum | Verified of string
 
 let check_url label url expected_hashes =
   Lwt_main.run
@@ -48,7 +45,7 @@ let () =
     [ ("--debug", Arg.Set Common.debug, "  Enable debug output") ]
     (fun s -> positional := s :: !positional)
     "Usage: check_source [--debug] <package.version> [<url>]";
-  let (package_str, url_opt) =
+  let package_str, url_opt =
     match List.rev !positional with
     | [ p ] -> (p, None)
     | [ p; u ] -> (p, Some u)
@@ -102,21 +99,24 @@ let () =
     Option.map (fun url -> check_url "CLI URL" url expected_hashes) url_opt
   in
   let cache_result = check_cache hash_paths expected_hashes in
-  let all_results = src_result :: Option.to_list cli_result @ [ cache_result ] in
+  let all_results =
+    (src_result :: Option.to_list cli_result) @ [ cache_result ]
+  in
   let had_error = any_wrong_checksum all_results in
   match first_verified all_results with
   | None ->
-      print_endline
-        "No source with correct checksum found.";
+      print_endline "No source with correct checksum found.";
       exit 1
   | Some _ when not had_error ->
-      print_endline "All checked sources have correct checksums. No action needed."
-  | Some content ->
-      print_endline "Checksum mismatch on at least one source; saving verified content.";
-      (try
-         let pkg_str, filename = Common.save_package_file opam_p content in
-         Common.save_to_saved_files [ Common.make_saved_entry pkg_str filename ];
-         print_endline ("Saved " ^ filename ^ " and added to saved_files.txt")
-       with e ->
-         Printf.eprintf "Error saving file: %s\n" (Printexc.to_string e);
-         exit 1)
+      print_endline
+        "All checked sources have correct checksums. No action needed."
+  | Some content -> (
+      print_endline
+        "Checksum mismatch on at least one source; saving verified content.";
+      try
+        let pkg_str, filename = Common.save_package_file opam_p content in
+        Common.save_to_saved_files [ Common.make_saved_entry pkg_str filename ];
+        print_endline ("Saved " ^ filename ^ " and added to saved_files.txt")
+      with e ->
+        Printf.eprintf "Error saving file: %s\n" (Printexc.to_string e);
+        exit 1)

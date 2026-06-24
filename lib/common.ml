@@ -2,13 +2,16 @@ let caches =
   [ "https://opam.ocaml.org/cache/"; "https://opam.robur.coop/cache/" ]
 
 let debug = ref false
-let dlog fmt = Printf.ksprintf (fun s -> if !debug then print_endline ("[debug] " ^ s)) fmt
+
+let dlog fmt =
+  Printf.ksprintf (fun s -> if !debug then print_endline ("[debug] " ^ s)) fmt
 
 let get_opam_repo () =
   let opam_root =
     OpamFilename.concat_and_resolve (OpamStateConfig.opamroot ()) "repo/default"
   in
-  print_endline ("Using opam repository at: " ^ OpamFilename.Dir.to_string opam_root);
+  print_endline
+    ("Using opam repository at: " ^ OpamFilename.Dir.to_string opam_root);
   opam_root
 
 let get_opam_file opam_repo p =
@@ -29,10 +32,10 @@ let get_all_versions opam_repo name =
   else
     OpamFilename.dirs pkg_dir
     |> List.filter_map (fun dir ->
-           let base = Filename.basename (OpamFilename.Dir.to_string dir) in
-           match package_of_string_opt base with
-           | Some pkg when OpamPackage.name pkg = name -> Some pkg
-           | _ -> None)
+        let base = Filename.basename (OpamFilename.Dir.to_string dir) in
+        match package_of_string_opt base with
+        | Some pkg when OpamPackage.name pkg = name -> Some pkg
+        | _ -> None)
 
 let get_source_url opam_package =
   match OpamFile.OPAM.url opam_package with
@@ -80,10 +83,10 @@ let rec retry url = function
 
 let rec download_from_caches = function
   | [] -> Lwt.return_none
-  | url :: rest ->
+  | url :: rest -> (
       let open Lwt.Syntax in
       let* content = retry url caches in
-      (match content with
+      match content with
       | Some _ -> Lwt.return content
       | None -> download_from_caches rest)
 
@@ -157,7 +160,8 @@ let save_package_file opam_package content =
 let github_archive_base =
   "https://github.com/ocaml/opam-source-archives/raw/main/"
 
-let make_saved_entry pkg_str filename = pkg_str ^ " " ^ github_archive_base ^ filename
+let make_saved_entry pkg_str filename =
+  pkg_str ^ " " ^ github_archive_base ^ filename
 
 let save_to_saved_files entries =
   match entries with
@@ -253,8 +257,7 @@ let fetch_if_missing p opam_p =
           Lwt.return_none)
         else (
           print_endline
-            ("Source URL unreachable for "
-             ^ OpamPackage.to_string p
-             ^ ", fetching from cache");
+            ("Source URL unreachable for " ^ OpamPackage.to_string p
+           ^ ", fetching from cache");
           let urls = process opam_p in
           get p opam_p urls)

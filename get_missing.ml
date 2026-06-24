@@ -3,25 +3,25 @@ let () =
   let file = ref None in
   let cli_packages = ref [] in
   Arg.parse
-    [ ( "-f"
-      , Arg.String (fun s -> file := Some s)
-      , "<file>  Read package list from file (one entry per line)" )
-    ; ( "--file"
-      , Arg.String (fun s -> file := Some s)
-      , "<file>  Read package list from file (one entry per line)" )
-    ; ("--debug", Arg.Set Common.debug, "  Enable debug output")
+    [
+      ( "-f",
+        Arg.String (fun s -> file := Some s),
+        "<file>  Read package list from file (one entry per line)" );
+      ( "--file",
+        Arg.String (fun s -> file := Some s),
+        "<file>  Read package list from file (one entry per line)" );
+      ("--debug", Arg.Set Common.debug, "  Enable debug output");
     ]
     (fun p -> cli_packages := p :: !cli_packages)
     "Usage: get_missing [--debug] [-f <file>] [package.version | package] ...";
   let file_packages =
-    match !file with
-    | None -> []
-    | Some path -> Common.read_lines path
+    match !file with None -> [] | Some path -> Common.read_lines path
   in
   let args = List.rev !cli_packages @ file_packages in
   if args = [] then (
     print_endline
-      "No packages specified. Provide package names as arguments or use -f <file>.";
+      "No packages specified. Provide package names as arguments or use -f \
+       <file>.";
     exit 1);
   Common.dlog "processing %d entr%s: %s" (List.length args)
     (if List.length args = 1 then "y" else "ies")
@@ -40,10 +40,8 @@ let () =
                  Lwt.return (Option.to_list r)
                with e ->
                  print_endline
-                   ("Error processing "
-                    ^ OpamPackage.to_string p
-                    ^ ": "
-                    ^ Printexc.to_string e);
+                   ("Error processing " ^ OpamPackage.to_string p ^ ": "
+                  ^ Printexc.to_string e);
                  Lwt.return [])
            | None ->
                let name = OpamPackage.Name.of_string arg in
@@ -64,14 +62,12 @@ let () =
                        Common.fetch_if_missing p opam_p
                      with e ->
                        print_endline
-                         ("Error processing "
-                          ^ OpamPackage.to_string p
-                          ^ ": "
-                          ^ Printexc.to_string e);
+                         ("Error processing " ^ OpamPackage.to_string p ^ ": "
+                        ^ Printexc.to_string e);
                        Lwt.return_none)
                    versions))
          args
-       |> Lwt.map List.concat)
+      |> Lwt.map List.concat)
     |> List.map (fun (p, n) -> Common.make_saved_entry p n)
   in
   Common.save_to_saved_files ns
