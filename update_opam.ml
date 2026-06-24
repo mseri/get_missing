@@ -36,5 +36,5 @@ let () =
       in
       let url_p = OpamFile.URL.create ~checksum (OpamUrl.of_string url) in
       let opam_p = OpamFile.OPAM.with_url url_p opam_p in
-      OpamFile.OPAM.write fn opam_p)
+      OpamFile.OPAM.write_with_preserved_format fn opam_p)
     ps
