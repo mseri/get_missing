@@ -6,7 +6,7 @@ The context for this is on the [opam-repository wiki](https://github.com/ocaml/o
 
 The archival in the [ocaml/opam-source-archives](https://github.com/ocaml/opam-source-archives) repository is manual and I don't have plans to automate it for the moment (even though it would benefit from some polishing).
 
-The commands have also a minimal help in case of doubts and a helpful (for me) debug flag.
+Note that the commands have also a minimal help in case of doubts and a helpful (for me) debug flag. They were assembled for my own sake and automation, so the quality is what it is and I am not really intending to improve them more than I need.
 
 ## How to use
 
@@ -41,3 +41,9 @@ This reads the entries from `saved_files.txt`, resolves the corresponding `opam`
 ### 4. Open a Pull Request
 
 From your local copy of `ocaml/opam-repository`, commit the changes, push the branch to your repo and submit a Pull Request to upstream `ocaml/opam-repository`.
+
+---
+
+## Use of LLMs
+
+Most of the code is written by me, except `get_source.ml` and a PR by Claude, and the deduplication of urls by `gemma4-e4b` run locally but then edited by hand (with a small refactor by Claude and a hand polish). None of this code has been accepted without me checking it first.
